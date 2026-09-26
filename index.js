@@ -6,6 +6,7 @@ const cancelFormBtn = document.getElementById("cancel-form-btn");
 const createNewAccountBtn = document.getElementById("create-new-account-btn");
 const doManualJournalEntryBtn = document.getElementById("do-manual-journal-entry-btn");
 const createNewTransactionTemplateBtn = document.getElementById("create-new-transaction-template-btn");
+const doTransactionBtn = document.getElementById("do-transaction-btn");
 const closeLedgerBtn = document.getElementById("close-ledger-btn");
 const saveLedgerBtn = document.getElementById("save-ledger-btn");
 const ledgerState = document.getElementById("ledger-state");
@@ -506,6 +507,53 @@ createNewTransactionTemplateBtn.addEventListener("click", _ => doForm(
     }
 ));
 
+doTransactionBtn.addEventListener("click", _ => doForm(
+    "Transaction",
+    el$("form").body$(form => {
+        const select = el$("select").atts$({ id: "txForm", name: "txForm" }).body$(select => {
+            let i = 0;
+            for(const tt of currentLedger.transactionTemplates) {
+                select.add$(el$("option").att$("value", i).add$(tt.title))
+                i += 1;
+            }
+        });
+
+        const fields = el$("div")
+        const renderTemplate = index => {
+            fields.innerHTML = "";
+            const template = currentLedger.transactionTemplates[index];
+            for (const [name, txField] of Object.entries(template.form)) {
+                fields.add$(el$("div").add$(
+                    el$("label").att$("for", `field-${name}`).add$(`${name} (${txField}): `),
+                    el$("input").atts$({ id: `field-${name}`, type: "number", name }),
+                ))
+            }
+        }
+
+        renderTemplate(0);
+        select.onchange = ev => renderTemplate(parseInt(ev.target.value))
+
+        form.add$(
+            el$("h2").add$("Transaction"),
+            el$("div").add$(
+                el$("label").att$("for", "txDescription").add$("Description (optional): "),
+                el$("input").atts$({ id: "txDescription", type: "text", name: "txDescription" }),
+            ),
+            el$("div").add$(
+                el$("label").att$("for", "txForm").add$("Template: "),
+                select,
+            ),
+            fields,
+            el$("p").add$(
+                el$("button").att$("type", "submit").add$("Submit"),
+            ),
+        )
+    }),
+    formData => {
+
+    }
+));
+
 saveLedgerBtn.addEventListener("click", _ => {
     if(!downloadLedgerAsFile()) return;
 });
@@ -594,9 +642,11 @@ function createNewBasicLedger() {
                 amount: 0,
             }
         ],
+        // TODO: rename this into forms
         transactionTemplates: [
             {
                 "title": "Food Fee",
+                // TODO: rename this into fields
                 "form": {
                     "Cost": "number|debit:X-1|credit:A-1",
                 }
