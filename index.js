@@ -5,6 +5,7 @@ const createNewLedgerBtn = document.getElementById("create-new-ledger-btn");
 const cancelFormBtn = document.getElementById("cancel-form-btn");
 const createNewAccountBtn = document.getElementById("create-new-account-btn");
 const doManualJournalEntryBtn = document.getElementById("do-manual-journal-entry-btn");
+const createNewTransactionTemplateBtn = document.getElementById("create-new-transaction-template-btn");
 const closeLedgerBtn = document.getElementById("close-ledger-btn");
 const saveLedgerBtn = document.getElementById("save-ledger-btn");
 const ledgerState = document.getElementById("ledger-state");
@@ -105,6 +106,9 @@ function addTx(description, entries) {
     renderLedgerState()
 }
 
+function addTemplate(title, fields) {
+}
+
 function el$(tag) {
     const result = document.createElement(tag);
     result.add$ = function(...items) {
@@ -121,6 +125,14 @@ function el$(tag) {
         this.setAttribute(key, value)
         return this
     }
+
+    result.atts$ = function(obj) {
+        for (const [key, value] of Object.entries(obj)) {
+            this.setAttribute(key, value);
+        }
+        return this;
+    }
+
     result.body$ = function(callback) {
         callback(this);
         return this;
@@ -171,6 +183,26 @@ function renderLedgerState() {
                     el$("td").add$(`${tx.T}`),
                     el$("td").add$(`${tx.D}`),
                     el$("td").add$(`${e}`),
+                ))
+            }
+        }));
+    }));
+    ledgerState.appendChild(el$("h3").add$("Transaction Templates"));
+    ledgerState.appendChild(el$("table").body$(templates => {
+        templates.add$(
+            el$("thead").add$(el$("tr").add$(
+                el$("td").add$("Title"),
+                el$("td").add$("Fields"),
+            ))
+        )
+        templates.add$(el$("tbody").body$(tbody => {
+            for(const tt of currentLedger.transactionTemplates) {
+                const fields = Object.entries(tt.form)
+                    .map(([label, spec]) => `${label} (${spec})`)
+                    .join(", ");
+                tbody.add$(el$("tr").add$(
+                    el$("td").add$(`${tt.title}`),
+                    el$("td").add$(fields)
                 ))
             }
         }));
@@ -333,6 +365,147 @@ doManualJournalEntryBtn.addEventListener("click", _ => doForm(
     },
 ))
 
+createNewTransactionTemplateBtn.addEventListener("click", _ => doForm(
+    "New Transaction Template Creation",
+    el$("form").body$(form => {
+        form.add$(el$("h2").add$("Create New Transaction Template"))
+        form.add$(el$("div").add$(
+            el$("label").att$("for", "title").add$("Template Title: "),
+            el$("input")
+                .att$("id", "title")
+                .att$("type", "text")
+                .att$("name", "title")
+                .att$("placeholder", "e.g. Salary Income")
+        ));
+        const fields = el$("ol")
+        form.add$(fields);
+        const addField = _ => {
+            const field = el$("li").add$(
+                el$("input").att$("type", "text").att$("name", "fieldLabel")
+                    .att$("placeholder", "Field Label (e.g. Cost)"),
+                " - ",
+            )
+            /** @type {HTMLSelectElement} */
+            const select = el$("select").att$("name", "fieldAction").add$(
+                el$("option").att$("value", "VOID").add$("None"),
+                el$("option").att$("value", "DC").add$("Debit & Credit"),
+                el$("option").att$("value", "DO").add$("Debit Only"),
+                el$("option").att$("value", "CO").add$("Credit Only"),
+            );
+            const action = el$("span").add$("No Action");
+            select.onchange = ev => {
+                const value = ev.target.value 
+                action.innerHTML = ""
+                switch(value) {
+                case "VOID":
+                    {
+                        action.add$(
+                            // stub value
+                            el$("input").atts$({ type: "hidden", name: "fieldActionDebitInto",  value: "" }),
+                            el$("input").atts$({ type: "hidden", name: "fieldActionCreditInto", value: "" }),
+                        )
+                        action.add$("No Action");
+                    } break;
+                case "DO":
+                    {
+                        action.add$(
+                            // stub value
+                            el$("input").atts$({ type: "hidden", name: "fieldActionCreditInto",  value: "" }),
+                        )
+                        action.add$(el$("select").att$("name", "fieldActionDebitDebitInto").body$(
+                            (selection) => {
+                                for(const account of currentLedger.chartOfAccounts) {
+                                    selection.add$(el$("option")
+                                        .att$("value", account.code)
+                                        .add$(`${account.code} - ${account.name}`))
+                                }
+                            }
+                        ))
+                    } break;
+                case "CO":
+                    {
+                        action.add$(
+                            // stub value
+                            el$("input").atts$({ type: "hidden", name: "fieldActionDebitInto",  value: "" }),
+                        )
+                        action.add$(el$("select").att$("name", "fieldActionCreditInto").body$(
+                            (selection) => {
+                                for(const account of currentLedger.chartOfAccounts) {
+                                    selection.add$(el$("option")
+                                        .att$("value", account.code)
+                                        .add$(`${account.code} - ${account.name}`))
+                                }
+                            }
+                        ))
+                    } break;
+                case "DC":
+                    {
+                        action.add$(el$("select").att$("name", "fieldActionDebitInto").body$(
+                            (selection) => {
+                                for(const account of currentLedger.chartOfAccounts) {
+                                    selection.add$(el$("option")
+                                        .att$("value", account.code)
+                                        .add$(`${account.code} - ${account.name}`))
+                                }
+                            }
+                        ))
+                        action.add$(el$("select").att$("name", "fieldActionCreditInto").body$(
+                            (selection) => {
+                                for(const account of currentLedger.chartOfAccounts) {
+                                    selection.add$(el$("option")
+                                        .att$("value", account.code)
+                                        .add$(`${account.code} - ${account.name}`))
+                                }
+                            }
+                        ))
+                    } break;
+                }
+            }
+            field.add$(
+                select,
+                " - ",
+                action,
+                " - ",
+                el$("button").att$("type", "button").add$("Remove").onclick$(_ => {
+                    fields.removeChild(field);
+                })
+            )
+            fields.add$(field)
+        }
+        form.add$(el$("p").add$(
+            el$("button").att$("type", "submit").add$("Submit"),
+            " - ",
+            el$("button").att$("type", "button").add$("Add Field").onclick$(addField),
+        ))
+    }),
+    formData => {
+        const title  = formData.get("title")
+        const fieldLabel  = formData.getAll("fieldLabel");
+        const fieldAction = formData.getAll("fieldAction");
+        const fieldActionDebitInto = formData.getAll("fieldActionDebitInto")
+        const fieldActionCreditInto = formData.getAll("fieldActionCreditInto")
+        const fields = {}
+        for(let i = 0; i < fieldLabel.length; ++i) {
+            const label  = fieldLabel[i];
+            const action = fieldAction[i];
+            switch(action) {
+                case "VOID":
+                    break;
+                case "DC":
+                    fields[label] = `number|debit:${fieldActionDebitInto[i]}|credit:${fieldActionCreditInto[i]}`
+                    break;
+                case "DO":
+                    fields[label] = `number|debit:${fieldActionDebitInto[i]}`
+                    break;
+                case "DC":
+                    fields[label] = `number|credit:${fieldActionCreditInto[i]}`
+                    break;
+            }
+        }
+        addTemplate(title, fields);
+    }
+));
+
 saveLedgerBtn.addEventListener("click", _ => {
     if(!downloadLedgerAsFile()) return;
 });
@@ -425,15 +598,13 @@ function createNewBasicLedger() {
             {
                 "title": "Food Fee",
                 "form": {
-                    "Cost": "E|debit:X-1|credit:A-1",
-                    "Description": "D|optional",
+                    "Cost": "number|debit:X-1|credit:A-1",
                 }
             },
             {
                 "title": "Salary",
                 "form": {
-                    "Cost": "E|debit:A-1|credit:R-2",
-                    "Description": "D|optional",
+                    "Cost": "number|debit:A-1|credit:R-2",
                 }
             }
         ],
