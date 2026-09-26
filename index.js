@@ -5,7 +5,8 @@ const createNewLedgerBtn = document.getElementById("create-new-ledger-btn");
 const cancelFormBtn = document.getElementById("cancel-form-btn");
 const createNewAccountBtn = document.getElementById("create-new-account-btn");
 const doManualJournalEntryBtn = document.getElementById("do-manual-journal-entry-btn");
-const closeLedgerBtn  = document.getElementById("close-ledger-btn");
+const closeLedgerBtn = document.getElementById("close-ledger-btn");
+const saveLedgerBtn = document.getElementById("save-ledger-btn");
 const ledgerState = document.getElementById("ledger-state");
 
 const anyForm = document.getElementById("any-form");
@@ -52,7 +53,7 @@ const MAP = {
     "L": "LIABILITY",
     "E": "EQUITY",
     "R": "REVENUE",
-    "E": "EQUITY",
+    "X": "EXPENSE",
 }
 
 function addAccount(code, name, kind, amount) {
@@ -70,7 +71,7 @@ function addAccount(code, name, kind, amount) {
         `Invalid account kind. It must start with either 'ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE'`
     );
 
-    const must = MAP[name[0]]
+    const must = MAP[code[0]]
     if(must !== kind) return showError(
         `Your account code ${code} starts with ${code[0]} but it doesn't map well with the kind ${kind}`
     );
@@ -80,6 +81,7 @@ function addAccount(code, name, kind, amount) {
 }
 
 function addTx(description, entries) {
+    // TODO: validate transactions
     console.log(description, entries)
     currentLedger.transactions.push({ D: description, E: entries, T: (new Date).toISOString() })
     renderLedgerState()
@@ -171,19 +173,15 @@ function doForm(formName, formElement, onSubmitHandler) {
     currentFormName = formName
     const currentForm = formElement;
 
-    formElement.classList.remove("hidden");
     cancelFormBtn.classList.remove("hidden");
-
-    if(!anyForm.contains(formElement)) {
-        anyForm.appendChild(formElement);
-    }
+    anyForm.appendChild(currentForm);
 
     const cancel = () => {
         currentForm.reset()
         cancelFormBtn.removeEventListener("click", cancel);
         currentForm.removeEventListener("submit", submit);
         cancelFormBtn.classList.add("hidden");
-        currentForm.classList.add("hidden");
+        anyForm.removeChild(currentForm);
         currentFormName = null;
     }
 
@@ -200,7 +198,45 @@ function doForm(formName, formElement, onSubmitHandler) {
 
 createNewAccountBtn.addEventListener("click", ev => doForm(
     "New Account Creation",
-    document.getElementById("new-account-creation-form"),
+    el$("form").body$(form => {
+        form.add$(el$("h2").add$("Create New Account"));
+        form.add$(el$("div").add$(
+            el$("label").att$("for", "code").add$("Code:"),
+            el$("input")
+                .att$("id", "code")
+                .att$("name", "code")
+                .att$("type", "text")
+                .att$("placeholder", "e.g. A-2"),
+        ));
+
+        form.add$(el$("div").add$(
+            el$("label").att$("for", "name").add$("Name:"),
+            el$("input")
+                .att$("id", "name")
+                .att$("name", "name")
+                .att$("type", "text")
+                .att$("placeholder", "e.g. Cash"),
+        ));
+        form.add$(el$("div").add$(
+            el$("label").att$("for", "kind").add$("Kind:"),
+            el$("select").att$("id", "kind").att$("name", "kind").add$(
+                el$("option").att$("value", "ASSET").add$("ASSET"),
+                el$("option").att$("value", "LIABILITY").add$("LIABILITY"),
+                el$("option").att$("value", "EQUITY").add$("EQUITY"),
+                el$("option").att$("value", "REVENUE").add$("REVENUE"),
+                el$("option").att$("value", "EXPENSES").add$("EXPENSES"),
+            )
+        ));
+        form.add$(el$("div").add$(
+            el$("label").att$("for", "amount").add$("Opening amount:"),
+            el$("input")
+                .att$("id", "amount")
+                .att$("name", "amount")
+                .att$("type", "number")
+                .att$("value", "0")
+        ));
+        form.add$(el$("p").add$(el$("button").att$("type", "submit").add$("submit")))
+    }),
     (formData) => {
         const data = Object.fromEntries(formData.entries());
         if(!addAccount(data.code, data.name, data.kind, (data.amount || 0))) return;
@@ -210,7 +246,6 @@ createNewAccountBtn.addEventListener("click", ev => doForm(
 doManualJournalEntryBtn.addEventListener("click", _ => doForm(
     "Manual Journal Entry",
     el$("form").body$(form => {
-        form.att$("class", "hidden");
         form.add$(el$("h2").add$("Manual Journal"));
         form.add$(el$("div").add$(
             el$("label").att$("for", "description").add$("Description: "),
@@ -220,9 +255,10 @@ doManualJournalEntryBtn.addEventListener("click", _ => doForm(
                 .att$("name", "description")
                 .att$("placeholder", "What is this for?"),
         ));
+        /** @type {HTMLElement} */
         const entries = el$("ol")
         const addEntry = _ => {
-            entries.add$(el$("li").add$(
+            const entry = el$("li").add$(
                 el$("select").att$("name", "account").body$(
                     (selection) => {
                         for(const account of currentLedger.chartOfAccounts) {
@@ -243,7 +279,12 @@ doManualJournalEntryBtn.addEventListener("click", _ => doForm(
                     .att$("value", "IDR"),
                 " - ",
                 el$("input").att$("type", "number").att$("name", "amount").att$("placeholder", "e.g. 10000"),
-            ))
+                " - ",
+                el$("button").att$("type", "button").add$("Remove").onclick$(_ => {
+                    entries.removeChild(entry);
+                })
+            )
+            entries.add$(entry)
         }
         addEntry()
         addEntry()
@@ -291,6 +332,7 @@ createNewLedgerBtn.addEventListener("click", ev => {
 
 submitLedgerBtn.addEventListener("click", ev => {
     if(hasAnyLedgerOpen()) return showError("Could not open another ledger you need to close it first");
+    const file = importLedgerFileInput.files[0];
     if(!file) return showError("Please select a valid ledger");
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -354,7 +396,7 @@ function createNewBasicLedger() {
             {
                 code: "X-1",
                 name: "Other Expenses",
-                kind: "EXPENSES",
+                kind: "EXPENSE",
                 amount: 0,
             }
         ],

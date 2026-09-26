@@ -74,38 +74,15 @@
                             <button>Do Transaction</button>
                         </td>
                         <td>
+                            <button id="save-ledger-btn">Save Ledger</button>
+                        </td>
+                        <td>
                             <button id="close-ledger-btn">Close Ledger</button>
                         </td>
                     </tr>
                 </table>
             </div>
-            <div id="any-form">
-                <form id="new-account-creation-form" class="hidden">
-                    <h2>Create New Account</h2>
-                    <div>
-                        <label for="code">Code:</label>
-                        <input id="code" name="code" type="text" placeholder="e.g. A-2">
-                    </div>
-                    <div>
-                        <label for="name">Name:</label>
-                        <input id="name" name="name" type="text" placeholder="e.g. Cash">
-                    </div>
-                    <div>
-                        <label for="kind">Kind:</label>
-                        <select name="kind" id="kind">
-                            <option value="ASSET">ASSET</option>
-                            <option value="LIABILITY">LIABILITY</option>
-                            <option value="EQUITY">EQUITY</option>
-                            <option value="REVENUE">REVENUE</option>
-                            <option value="EXPENSES">EXPENSES</option>
-                        </select>
-                    </div>
-                    <div><label>Opening Amount: <input type="number" name="amount" id="amount" value="0"></label></div>
-                    <p>
-                        <button type="submit">Submit</button>
-                    </p>
-                </form>
-            </div>
+            <div id="any-form"> </div>
             <div id="ledger-state"> </div>
         </div>
 
