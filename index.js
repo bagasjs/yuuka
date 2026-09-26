@@ -48,6 +48,24 @@ function openLedger(obj) {
     return true;
 }
 
+function downloadLedgerAsFile() {
+    if (!hasAnyLedgerOpen()) return false;
+    currentLedger.lastUpdate = new Date().toISOString();
+    const blob = new Blob([JSON.stringify(currentLedger, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ledger.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    renderLedgerSummary();
+    return true;
+}
+
 const MAP = {
     "A": "ASSET",
     "L": "LIABILITY",
@@ -75,7 +93,7 @@ function addAccount(code, name, kind, amount) {
     if(must !== kind) return showError(
         `Your account code ${code} starts with ${code[0]} but it doesn't map well with the kind ${kind}`
     );
-    currentLedger.chartOfAccounts.push({ code, name, kind, amount })
+    currentLedger.chartOfAccounts.push({ code, name, kind, amount: parseInt(amount) })
     renderLedgerState();
     return true;
 }
@@ -233,7 +251,7 @@ createNewAccountBtn.addEventListener("click", ev => doForm(
                 .att$("id", "amount")
                 .att$("name", "amount")
                 .att$("type", "number")
-                .att$("value", "0")
+                .att$("value", 0)
         ));
         form.add$(el$("p").add$(el$("button").att$("type", "submit").add$("submit")))
     }),
@@ -315,6 +333,9 @@ doManualJournalEntryBtn.addEventListener("click", _ => doForm(
     },
 ))
 
+saveLedgerBtn.addEventListener("click", _ => {
+    if(!downloadLedgerAsFile()) return;
+});
 
 ///
 /// Home Screen
