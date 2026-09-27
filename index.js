@@ -107,7 +107,13 @@ function addTx(description, entries) {
     renderLedgerState()
 }
 
+function addTxViaForm(formIndex, formValues, description) {
+    console.log(formIndex, formValues, description);
+    showError("Not implemented addTxViaForm");
+}
+
 function addTemplate(title, fields) {
+    showError("Not implemented addTemplate");
 }
 
 function el$(tag) {
@@ -498,7 +504,7 @@ createNewTransactionTemplateBtn.addEventListener("click", _ => doForm(
                 case "DO":
                     fields[label] = `number|debit:${fieldActionDebitInto[i]}`
                     break;
-                case "DC":
+                case "CO":
                     fields[label] = `number|credit:${fieldActionCreditInto[i]}`
                     break;
             }
@@ -525,7 +531,7 @@ doTransactionBtn.addEventListener("click", _ => doForm(
             for (const [name, txField] of Object.entries(template.form)) {
                 fields.add$(el$("div").add$(
                     el$("label").att$("for", `field-${name}`).add$(`${name} (${txField}): `),
-                    el$("input").atts$({ id: `field-${name}`, type: "number", name }),
+                    el$("input").atts$({ required: true, id: `field-${name}`, type: "number", name }),
                 ))
             }
         }
@@ -550,7 +556,28 @@ doTransactionBtn.addEventListener("click", _ => doForm(
         )
     }),
     formData => {
-
+        const txFormIndex = formData.get("txForm")
+        if(typeof txFormIndex !== "number") {
+            showError(`Something went wrong we could not execute your transaction`);
+            return;
+        }
+        const txForm = currentLedger.transactionTemplates[txFormIndex];
+        console.log(formData);
+        const txFormValues = {}
+        for(const [fieldName, fieldAction] of Object.entries(txForm.form)) {
+            if(!formData.has(fieldName)) {
+                showError(`Something went wrong we could not execute your transaction`);
+                return;
+            }
+            const fieldValue = formData.get(fieldName);
+            if(!fieldValue) {
+                showError(`Please submit a correct value for field ${fieldName} in the form ${txForm.title}`);
+                return;
+            }
+            txFormValues[fieldName] = fieldValue;
+            console.log(fieldName, fieldAction, fieldValue);
+        }
+        addTxViaForm(txFormIndex, txFormValues, formData.get("description"));
     }
 ));
 
@@ -654,7 +681,7 @@ function createNewBasicLedger() {
             {
                 "title": "Salary",
                 "form": {
-                    "Cost": "number|debit:A-1|credit:R-2",
+                    "Salary": "number|debit:A-1|credit:R-2",
                 }
             }
         ],
