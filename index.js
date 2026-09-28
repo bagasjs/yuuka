@@ -17,6 +17,7 @@ const mainPage = document.getElementById("main");
 const greetingPage = document.getElementById("greeting");
 
 let currentLedger = null;
+let currentLedgerAccountMap = {}
 let currentFormName = null;
 
 function showError(message) {
@@ -46,13 +47,17 @@ function openLedger(obj) {
     greetingPage.classList.toggle("hidden");
     document.getElementById("ledger-summary").innerText = 
         `Ledger open with ${currentLedger.chartOfAccounts.length} account(s), ${currentLedger.transactions.length} transaction(s)`
+
+    for(const account of currentLedger.chartOfAccounts) {
+        currentLedgerAccountMap[account.code] = account;
+    }
+
     renderLedgerState()
     return true;
 }
 
 function downloadLedgerAsFile() {
     if (!hasAnyLedgerOpen()) return false;
-    currentLedger.lastUpdate = new Date().toISOString();
     const blob = new Blob([JSON.stringify(currentLedger, null, 2)], {
         type: "application/json",
     });
@@ -96,24 +101,111 @@ function addAccount(code, name, kind, amount) {
         `Your account code ${code} starts with ${code[0]} but it doesn't map well with the kind ${kind}`
     );
     currentLedger.chartOfAccounts.push({ code, name, kind, amount: parseInt(amount) })
-    renderLedgerState();
     return true;
 }
 
 function addTx(description, entries) {
     // TODO: validate transactions
-    console.log(description, entries)
-    currentLedger.transactions.push({ D: description, E: entries, T: (new Date).toISOString() })
+    let sum = 0;
+    for(const [ accountCode, side, currency, amount ] of entries) {
+        switch(side) {
+            case "D":
+                sum += amount;
+                break;
+            case "C":
+                sum -= amount;
+                break;
+            default:
+                return showError(`addTx: entry side ${side} it must be either "D" for Debit or "C" for Credit`);
+        }
+    }
+    if(sum !== 0) 
+        return showError("addTx: invalid transaction with unbalance debit and credit entries");
+    currentLedger.transactions.push({ D: (description || "N/A"), E: entries, T: (new Date).toISOString() })
+
+    currentLedger.lastTransaction = (new Date()).toISOString()
+
     renderLedgerState()
 }
 
+const KIND_NORMAL_SIDE = {
+    "ASSET": "D",
+    "LIABILITY": "C",
+    "EQUITY": "C",
+    "REVENUE": "C",
+    "EXPENSE": "D",
+}
+
+/** 
+ * @param {{ removeAggregatedTransactions: boolean }} options
+ */
+function aggregateLedgerTransactions(options) {
+    // TODO: implement all the stuff in the options
+    options = options ?? {}
+    currentLedger.lastTransactionAggregation = currentLedger.lastTransactionAggregation ?? (new Date(0)).toISOString()
+    const a = new Date(currentLedger.lastTransactionAggregation);
+    const b = new Date(currentLedger.lastTransactionRecord);
+    if(a > b) return true;
+
+    for(const tx of currentLedger.transactions) {
+        const c = new Date(tx.T);
+        if(c < a) continue; // Skip aggregated transactions
+
+        for(const [ accountCode, side, currency, amount ] of tx.E) {
+            const account = currentLedgerAccountMap[accountCode];
+            if(!account) return showError("aggregateLedgerTransactions: Something went wrong")
+            const newAmount = side === KIND_NORMAL_SIDE[account.kind] ? amount : -amount;
+            console.log(account, newAmount);
+            account.amount += newAmount;
+            console.log(account);
+        }
+    }
+}
+
 function addTxViaForm(formIndex, formValues, description) {
-    console.log(formIndex, formValues, description);
-    showError("Not implemented addTxViaForm");
+    const txForm = currentLedger.transactionTemplates[formIndex];
+    if(!txForm) return showError(`addTxViaForm: invalid form index ${formIndex} it's out of bound`);
+    const entries = []
+
+    for(const [fieldName, fieldAction] of Object.entries(txForm.form)) {
+        /** @type {string[]} */
+        const actions = fieldAction.split("|");
+        let valueNumber = 0;
+        let currency  = "IDR";
+        for(const action of actions) {
+            if(action === "number") {
+                const value = formValues[fieldName]
+                valueNumber = parseInt(value);
+                if(Number.isNaN(valueNumber)) 
+                    return showError(`addTxViaForm: invalid form field ${fieldName} with value ${value}. Expected a number got a ${typeof value}`);
+            } else if(action.startsWith("debit:")) {
+                const account = action.slice(action.search(":")+1);
+                entries.push([
+                    account,
+                    "D",
+                    currency,
+                    valueNumber,
+                ]);
+            } else if(action.startsWith("credit:")) {
+                const account = action.slice(action.search(":")+1);
+                entries.push([
+                    account,
+                    "C",
+                    currency,
+                    valueNumber,
+                ]);
+            }
+        }
+    }
+
+    if(!addTx(description ?? txForm.title, entries)) return false;
 }
 
 function addTemplate(title, fields) {
-    showError("Not implemented addTemplate");
+    currentLedger.transactionTemplates.push({
+        title,
+        form: fields,
+    });
 }
 
 function el$(tag) {
@@ -153,6 +245,7 @@ function el$(tag) {
 
 function renderLedgerState() {
     ledgerState.innerHTML = ""
+    aggregateLedgerTransactions();
     ledgerState.appendChild(el$("h3").add$("Chart of Accounts"));
     ledgerState.appendChild(el$("table").body$(chartOfAccounts => {
         chartOfAccounts.add$(
@@ -297,6 +390,7 @@ createNewAccountBtn.addEventListener("click", ev => doForm(
     (formData) => {
         const data = Object.fromEntries(formData.entries());
         if(!addAccount(data.code, data.name, data.kind, (data.amount || 0))) return;
+        renderLedgerState();
     }
 ));
 
@@ -369,6 +463,7 @@ doManualJournalEntryBtn.addEventListener("click", _ => doForm(
             ]);
         }
         addTx(description, entries);
+        renderLedgerState();
     },
 ))
 
@@ -509,7 +604,8 @@ createNewTransactionTemplateBtn.addEventListener("click", _ => doForm(
                     break;
             }
         }
-        addTemplate(title, fields);
+        if(!addTemplate(title, fields)) return;
+        renderLedgerState();
     }
 ));
 
@@ -556,15 +652,14 @@ doTransactionBtn.addEventListener("click", _ => doForm(
         )
     }),
     formData => {
-        const txFormIndex = formData.get("txForm")
-        if(typeof txFormIndex !== "number") {
+        const txFormIndex = parseInt(formData.get("txForm"));
+        if(Number.isNaN(txFormIndex)) {
             showError(`Something went wrong we could not execute your transaction`);
             return;
         }
         const txForm = currentLedger.transactionTemplates[txFormIndex];
-        console.log(formData);
         const txFormValues = {}
-        for(const [fieldName, fieldAction] of Object.entries(txForm.form)) {
+        for(const [fieldName, _] of Object.entries(txForm.form)) {
             if(!formData.has(fieldName)) {
                 showError(`Something went wrong we could not execute your transaction`);
                 return;
@@ -575,9 +670,9 @@ doTransactionBtn.addEventListener("click", _ => doForm(
                 return;
             }
             txFormValues[fieldName] = fieldValue;
-            console.log(fieldName, fieldAction, fieldValue);
         }
-        addTxViaForm(txFormIndex, txFormValues, formData.get("description"));
+        if(!addTxViaForm(txFormIndex, txFormValues, formData.get("description"))) return;
+        renderLedgerState();
     }
 ));
 
@@ -685,8 +780,8 @@ function createNewBasicLedger() {
                 }
             }
         ],
-        lastAggregation: "",
-        lastUpdate: "",
+        lastTransactionAggregation: 0,
+        lastTransactionRecord: 0,
         transactions: [
             {
                 "E": [ 
