@@ -374,7 +374,7 @@ createNewAccountBtn.addEventListener("click", ev => doForm(
                 el$("option").att$("value", "LIABILITY").add$("LIABILITY"),
                 el$("option").att$("value", "EQUITY").add$("EQUITY"),
                 el$("option").att$("value", "REVENUE").add$("REVENUE"),
-                el$("option").att$("value", "EXPENSES").add$("EXPENSES"),
+                el$("option").att$("value", "EXPENSE").add$("EXPENSE"),
             )
         ));
         form.add$(el$("div").add$(
