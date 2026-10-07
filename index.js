@@ -20,6 +20,12 @@ let currentLedger = null;
 let currentLedgerAccountMap = {}
 let currentFormName = null;
 
+const numberFormat = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currencySign: 'accounting',
+    currency: 'IDR',
+});
+
 function showError(message) {
     alert(message)
     return false;
@@ -123,7 +129,7 @@ function addTx(description, entries) {
         return showError("addTx: invalid transaction with unbalance debit and credit entries");
     currentLedger.transactions.push({ D: (description || "N/A"), E: entries, T: (new Date).toISOString() })
 
-    currentLedger.lastTransaction = (new Date()).toISOString()
+    currentLedger.lastTransactionRecord = (new Date()).toISOString()
 
     renderLedgerState()
 }
@@ -151,15 +157,15 @@ function aggregateLedgerTransactions(options) {
         const c = new Date(tx.T);
         if(c < a) continue; // Skip aggregated transactions
 
-        for(const [ accountCode, side, currency, amount ] of tx.E) {
+        for(const [ accountCode, side, currency, amountRaw ] of tx.E) {
+            const amount = parseInt(amountRaw);
             const account = currentLedgerAccountMap[accountCode];
             if(!account) return showError("aggregateLedgerTransactions: Something went wrong")
             const newAmount = side === KIND_NORMAL_SIDE[account.kind] ? amount : -amount;
-            console.log(account, newAmount);
             account.amount += newAmount;
-            console.log(account);
         }
     }
+    currentLedger.lastTransactionAggregation = (new Date()).toISOString();
 }
 
 function addTxViaForm(formIndex, formValues, description) {
@@ -262,7 +268,7 @@ function renderLedgerState() {
                     el$("td").add$(`${account.code}`),
                     el$("td").add$(`${account.name}`),
                     el$("td").add$(`${account.kind}`),
-                    el$("td").add$(`${account.amount}`),
+                    el$("td").add$(numberFormat.format(account.amount)),
                 ))
             }
         }));
